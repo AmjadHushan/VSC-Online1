@@ -1,4 +1,4 @@
-import os
+cd /media/amjad-hushan/Lexarimport os
 import httpx
 import psutil
 import json
