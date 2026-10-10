@@ -1,10 +1,9 @@
-cd /media/amjad-hushan/Lexarimport os
 import httpx
 import psutil
 import json
 import asyncio
-from database import update_usage
-from finops_firewall import validate_finops_guardrail
+from database import update_tokens_usage
+from finops_firewall import check_firewall_status
 
 OLLAMA_URL = "http://127.0.0.1:11434/api/generate"  # رابط واجهة برمجة التطبيقات المحلية لنموذج أولاما
 MODEL_NAME = "qwen2.5:7b"
@@ -39,12 +38,12 @@ def align_generation_pacing() -> tuple[float, float, float]:
 
 async def generate_realism_script(topic_context: str) -> tuple[bool, str]:
     """
-    وكيل الكتابة التكيفي الكوني؛ يستهلك الموارد المتاحة بالكامل وبأقصى سرعة،
+    وكيل الكتابة التكيفي الكوني؛ يستهلك الموارد المتاحة بالكامل وبأقصى سرعة，
     ويحمي هامش الأمان 20% ديناميكياً عند ذروة الضغط فقط لحماية اللابتوب من التجميد.
     """
-    is_safe, firewall_message = validate_finops_guardrail()
-    if not is_safe:
-        return False, f"🚨 **جدار الحماية المالي حظر العملية:** {firewall_message}"
+    firewall_status = check_firewall_status()
+    if firewall_status != "SAFE" and firewall_status != "SAFE_TO_RUN":
+        return False, f"حائط الحماية نشط: {firewall_status}"
 
     system_instructions = (
         "أنت الكاتب التقني المحترف للمنظومة الذاتية. اكتب سيناريو فيديو دقيق، واقعي، وموجز بالفصحى الصارمة.\n"

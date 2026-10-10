@@ -1,8 +1,8 @@
 import os
 import httpx
 from duckduckgo_search import DDGS  # أداة البحث المجانية في الويب
-from finops_firewall import validate_finops_guardrail
-from database import update_usage
+from finops_firewall import check_firewall_status
+from database import update_tokens_usage
 
 # جلب الإعدادات والمسارات من ملف .env
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
@@ -14,9 +14,7 @@ def fetch_live_web_trends() -> str:
     try:
         print("🌐 [البحث الحي]: جاري جلب أحدث المقالات والترندات العالمية من الويب حالياً...")
         with DDGS() as ddgs:
-            # البحث عن أحدث الأخبار في مجال التكنولوجيا والذكاء الاصطناعي
             results = ddgs.text("latest Artificial Intelligence technology trends news", max_results=5)
-            
             web_context = ""
             for i, r in enumerate(results, 1):
                 web_context += f"📰 خبر {i}: {r['title']} - {r['body']}\n\n"
@@ -26,13 +24,11 @@ def fetch_live_web_trends() -> str:
         return "لا تتوفر سياقات حية من الويب حالياً."
 
 async def get_trending_topics() -> tuple[bool, str]:
-    """
-    استدعاء نموذج Qwen المحلي لرصد وتخطيط 3 مواضيع بناءً على الترند العالمي الحقيقي.
-    """
+    """استدعاء نموذج Qwen المحلي لرصد وتخطيط 3 مواضيع بناءً على الترند العالمي الحقيقي."""
     # 1. التحقق من حائط الحماية المالي
-    is_safe, message = validate_finops_guardrail()
-    if not is_safe:
-        return False, message
+    firewall_status = check_firewall_status()
+    if firewall_status != "SAFE" and firewall_status != "SAFE_TO_RUN":
+        return False, f"حائط الحماية المالي أو العتادي نشط: {firewall_status}"
 
     # 2. جلب البيانات الحقيقية من الإنترنت
     live_context = fetch_live_web_trends()
@@ -55,13 +51,12 @@ async def get_trending_topics() -> tuple[bool, str]:
         "prompt": prompt_instruction,
         "stream": False,
         "options": {
-            "temperature": 0.5  # تقليل درجة الحرارة لزيادة الالتزام والصرامة باللغة والسياق
+            "temperature": 0.5
         }
     }
 
     try:
         print(f"🤖 [وكيل الرصد]: جاري إرسال الترندات الحية لنموذج `{MODEL}` لصياغتها...")
-        
         async with httpx.AsyncClient(timeout=None) as client:
             response = await client.post(OLLAMA_URL, json=payload)
             response.raise_for_status()
@@ -69,7 +64,6 @@ async def get_trending_topics() -> tuple[bool, str]:
 
         ai_response = result.get("response", "لم يتم توليد نص.")
         
-        # قراءة الـ Tokens الفعلية الناتجة وتحديث الميزانية
         prompt_tokens = result.get("prompt_eval_count", 0)
         completion_tokens = result.get("eval_count", 0)
         
@@ -78,7 +72,7 @@ async def get_trending_topics() -> tuple[bool, str]:
             prompt_tokens = int(words_count * 0.3)
             completion_tokens = int(words_count * 0.7)
 
-        update_usage(prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
+        update_tokens_usage(prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
         print(f"📊 [وكيل الرصد]: تم تحديث الميزانية بعد استهلاك لـ ({prompt_tokens + completion_tokens}) توكن حقيقي.")
         
         return True, ai_response
@@ -88,3 +82,4 @@ async def get_trending_topics() -> tuple[bool, str]:
     except Exception as e:
         print(f"❌ خطأ داخلي في وكيل الرصد: {e}")
         return False, f"حدث خطأ غير متوقع أثناء استدعاء وكيل الرصد: {e}"
+

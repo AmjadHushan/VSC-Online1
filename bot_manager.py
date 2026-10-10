@@ -4,10 +4,9 @@ import httpx
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-
 # استيراد حائط الحماية وقاعدة البيانات المالية من نفس مجلد الفلاشة
-from finops_firewall import validate_finops_guardrail
-from database import update_usage, get_today_usage, init_db
+from finops_firewall import check_firewall_status
+from database import update_tokens_usage, init_db
 import sqlite3
 from datetime import datetime
 
@@ -130,22 +129,23 @@ async def reset_budget_command(update: Update, context: ContextTypes.DEFAULT_TYP
 # أمر الفحص التجريبي المحدث لحائط الحماية (/test_firewall)
 async def test_firewall_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
-    
-    is_safe, message = validate_finops_guardrail()
-    if not is_safe:
-        await update.message.reply_text(message)
+
+    firewall_status = check_firewall_status()
+    if firewall_status != "SAFE" and firewall_status != "SAFE_TO_RUN":
         return
+    await update.message.reply_text("⏳ جاري إضافة 20,000 توكن محاكاة لاستدعاء النموذج...")
+    update_tokens_usage(prompt_tokens=10000, completion_tokens=10000)
 
     await update.message.reply_text("⏳ محاكاة استدعاء للنموذج... جاري إضافة 20,000 توكن...")
-    update_usage(prompt_tokens=10000, completion_tokens=10000)
+update_tokens_usage(prompt_tokens=10000, completion_tokens=10000)
     
     # تحقق إضافي بعد التحديث لرصد التنبيه التدريجي عند 80%
-    usage = get_today_usage()
-    max_tokens = int(os.getenv("MAX_DAILY_TOKENS", 50000))
-    if (usage['total_tokens'] / max_tokens) >= 0.8 and usage['total_tokens'] < max_tokens:
-        await update.message.reply_text("⚠️ **تنبيه حائط الحماية (Soft Ceiling):** استهلاكك تخطى 80% من الميزانية المتاحة لليوم!")
-    else:
-        await update.message.reply_text("✅ تم تحديث الاستهلاك بنجاح.")
+    #usage = get_today_usage()
+    #max_tokens = int(os.getenv("MAX_DAILY_TOKENS", 50000))
+    #if (usage['total_tokens'] / max_tokens) >= 0.8 and usage['total_tokens'] < max_tokens:
+    #    await update.message.reply_text("⚠️ **تنبيه حائط الحماية (Soft Ceiling):** استهلاكك تخطى 80% من الميزانية المتاحة لليوم!")
+    #else:
+    #    await update.message.reply_text("✅ تم تحديث الاستهلاك بنجاح.")
 
 # أمر عرض حالة المنظومة الحالية (/status)
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
